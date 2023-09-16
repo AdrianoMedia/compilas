@@ -5,6 +5,8 @@ import java.awt.EventQueue;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.text.Document;
 
@@ -36,7 +38,13 @@ import java.awt.Image;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.List;
 import java.awt.event.ActionEvent;
 import javax.swing.JSeparator;
 import javax.swing.JTextPane;
@@ -238,7 +246,7 @@ public class Tela extends JFrame {
 		textPaneMensagens.setEditable(false);
 		scrollPaneMensagens.setViewportView(textPaneMensagens);
 		
-		JLabel lblStatus = new JLabel("pasta/arquivo");
+		JLabel lblStatus = new JLabel("");
 		GridBagConstraints gbc_lblStatus = new GridBagConstraints();
 		gbc_lblStatus.anchor = GridBagConstraints.WEST;
 		gbc_lblStatus.gridwidth = 9;
@@ -266,14 +274,14 @@ public class Tela extends JFrame {
 		//Compilar[F7]
 		btnCompilar.addActionListener(new java.awt.event.ActionListener() {
 			public void actionPerformed(java.awt.event.ActionEvent e) {
-				textPaneMensagens.setText("compilação de programas ainda não foi implementada");
+				compilar(textAreaEditor, textPaneMensagens);
 			}
 		});
 		textPaneMensagens.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("F7"), "Compilar");
 		textPaneMensagens.getActionMap().put("Compilar", new AbstractAction() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				textPaneMensagens.setText("compilação de programas ainda não foi implementada");
+				textPaneMensagens.setText("erro na compilação");
 			}
 			
 		});
@@ -283,12 +291,16 @@ public class Tela extends JFrame {
 			public void actionPerformed(java.awt.event.ActionEvent e) {
 				textAreaEditor.setText("");
 				textPaneMensagens.setText("");
+				lblStatus.setText("");
 			}
 		});
 		textPaneMensagens.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control N"), "Novo");
 		textPaneMensagens.getActionMap().put("Novo", new AbstractAction() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
+				textAreaEditor.setText("");
+				textPaneMensagens.setText("");
+				lblStatus.setText("");
 			}
 			
 		});
@@ -296,23 +308,14 @@ public class Tela extends JFrame {
 		//copiar[ctrl-C]
 		btnCopiar.addActionListener(new java.awt.event.ActionListener() {
 			public void actionPerformed(java.awt.event.ActionEvent e) {
-			String text = textAreaEditor.getText();
-            if (!text.isEmpty()) {
-                java.awt.datatransfer.Clipboard clipboard = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
-                java.awt.datatransfer.StringSelection selection = new java.awt.datatransfer.StringSelection(text);
-                clipboard.setContents(selection, null);
-                textPaneMensagens.setText("código copiado!");
-            } else {
-            	textPaneMensagens.setText("não há nada para copiar!");
-            }
+				copiar(textAreaEditor, textPaneMensagens);
 			}
         });
 		textPaneMensagens.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control C"), "Copiar");
 		textPaneMensagens.getActionMap().put("Copiar", new AbstractAction() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				textPaneMensagens.setText("código copiado!");
-				
+				copiar(textAreaEditor, textPaneMensagens);
 			}
 		}
 		);
@@ -320,24 +323,14 @@ public class Tela extends JFrame {
 		//colar[ctrl-V]
 		btnColar.addActionListener(new java.awt.event.ActionListener() {
 	        public void actionPerformed(java.awt.event.ActionEvent e) {
-	        	Clipboard areaTransf = Toolkit.getDefaultToolkit().getSystemClipboard();
-	        	Transferable transf = areaTransf.getContents(null);
-	        	if (transf != null && transf.isDataFlavorSupported(DataFlavor.stringFlavor)) {
-	        		try {
-	        			String textoCopiado = (String) transf.getTransferData(DataFlavor.stringFlavor);
-	        			textAreaEditor.setText(textoCopiado);
-	        		} catch (Exception ex) {
-	        			ex.printStackTrace();
-	        			textPaneMensagens.setText("não há o que colar, area de transferência vazia(ctrl-C)!");
-	        		}
-	        	} 
+	        	colar(textAreaEditor, textPaneMensagens);
 	        }
 	        });
 			textPaneMensagens.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control V"), "Colar");
 			textPaneMensagens.getActionMap().put("Colar", new AbstractAction() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				textPaneMensagens.setText("código colado!");
+				colar(textAreaEditor, textPaneMensagens);
 			}
 			
 		});
@@ -345,25 +338,167 @@ public class Tela extends JFrame {
 		//abrir[ctrl-0]
 		btnAbrir.addActionListener(new java.awt.event.ActionListener() {
 			public void actionPerformed(java.awt.event.ActionEvent e) {
-				textAreaEditor.setText(Abrir(contentPane, lblStatus));
+				Abrir(contentPane, lblStatus, textPaneMensagens, textAreaEditor);
 			}
 		});
 		textPaneMensagens.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control O"), "Abrir");
 		textPaneMensagens.getActionMap().put("Abrir", new AbstractAction() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				textAreaEditor.setText(Abrir(contentPane, lblStatus));
+				Abrir(contentPane, lblStatus, textPaneMensagens, textAreaEditor);
 			}
 			
 		});
 		
+		//recortar[ctrl-X]
+		btnRecortar.addActionListener(new java.awt.event.ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				recortar(textAreaEditor, textPaneMensagens);
+			}
+		});
+		textPaneMensagens.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control X"), "Recortar");
+		textPaneMensagens.getActionMap().put("Recortar", new AbstractAction() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				recortar(textAreaEditor, textPaneMensagens);
+			}
+			
+		});
+		
+		//salvar [ctrl-S]
+		btnSalvar.addActionListener(new java.awt.event.ActionListener( ) {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				salvar(textAreaEditor, textPaneMensagens, lblStatus, contentPane);
+			}
+		});
+		textPaneMensagens.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control S"), "Recortar");
+		textPaneMensagens.getActionMap().put("Recortar", new AbstractAction() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				salvar(textAreaEditor, textPaneMensagens, lblStatus, contentPane);
+			}
+			
+		});
+	}
+	
+	//METODOS AUXILIARES | |
+	//					 V V
+	
+	
+	private void compilar(JTextArea textAreaEditor, JTextPane textPaneMensagens) {
+		Lexico lexico = new Lexico();
+		String inputText = textAreaEditor.getText();
+		StringReader reader = new StringReader(inputText);
+		StringBuilder ordemFinal = new StringBuilder();
+		lexico.setInput(reader);
+		try {
+		    Token t = null;
+		    while ((t = lexico.nextToken()) != null) {
+		        if (!t.isErrorToken(t)) {
+		        	String ordem = "linha " + getLineFromPosition(t.getPosition(), inputText) + "   " + " classe "
+		        + Token.getClassName(t.getId())+ "   " + "      lexema " + t.getLexeme() + "\n";
+		        	ordemFinal.append(ordem);	
+		        	textPaneMensagens.setText(ordemFinal.toString() + "\n" + "\n" + "programa compilado com sucesso");
+		        }  
+		    }
+		} catch (LexicalError e) {
+			textPaneMensagens.setText("");
+			String mensagemErro = "linha " + getLineFromPosition(e.getPosition(), inputText) + ": " + e.getLexeme()
+			+ " " + e.getMessage();
+		    textPaneMensagens.setText(mensagemErro);
+			
+		}
+		
+	}
+	
+	private int getLineFromPosition(int position, String input) {
+		int linhas = 1;
+		int pos = 0;
+		for(int i = 0; i < input.length() && pos <= position; i++) {
+			char c = input.charAt(i);
+			if (c == '\n') {
+				linhas++;
+			}
+			pos++;
+		}
+		return linhas;
+	}
+
+	private void salvar(JTextArea textAreaEditor,  JTextPane textPaneMensagens, JLabel lblStatus, JPanel ContentFrame) {
+		if(lblStatus.getText().equals("")) {
+			 JFileChooser fileChooser = new JFileChooser();
+			 FileNameExtensionFilter filter = new FileNameExtensionFilter("Text Files", "txt");
+			 fileChooser.setFileFilter(filter);
+		        int returnValue = fileChooser.showSaveDialog(null);
+
+		        if (returnValue == JFileChooser.APPROVE_OPTION) {
+		            String selectedFile = fileChooser.getSelectedFile().getAbsolutePath();
+		            String selectedFileTxt = selectedFile + ".txt";
+		            String content = textAreaEditor.getText();
+
+		            try (BufferedWriter writer = new BufferedWriter(new FileWriter(selectedFileTxt))) {
+		                writer.write(content);
+		                lblStatus.setText(selectedFile);
+		            } catch (IOException e) {
+		                e.printStackTrace();
+		            }
+		        }
+		} else {
+			 String content = textAreaEditor.getText();
+			try(BufferedWriter writer = new BufferedWriter(new FileWriter(lblStatus.getText()))) {
+				writer.write(content);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		textPaneMensagens.setText("Arquivo Salvo!");
+	}
+	
+	private void recortar(JTextArea textAreaEditor, JTextPane textPaneMensagens) {
+		String text = textAreaEditor.getSelectedText();
+        if (text != null && !text.isEmpty()) {
+            textAreaEditor.cut();
+            textPaneMensagens.setText("código recortado!");
+        } else {
+        	textPaneMensagens.setText("não há nada para recortar!");
+        }
+	}
+	
+	
+	private void copiar(JTextArea textAreaEditor, JTextPane textPaneMensagens) {	
+		String text = textAreaEditor.getSelectedText();
+        if (text != null) {
+            java.awt.datatransfer.Clipboard clipboard = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
+            java.awt.datatransfer.StringSelection selection = new java.awt.datatransfer.StringSelection(text);
+            clipboard.setContents(selection, null);
+            textPaneMensagens.setText("código copiado!");
+        } else {
+        	textPaneMensagens.setText("não há nada para copiar!");
+        }
+	}
+	
+	private void colar(JTextArea textAreaEditor, JTextPane textPaneMensagens) {
+		Clipboard areaTransf = Toolkit.getDefaultToolkit().getSystemClipboard();
+    	Transferable transf = areaTransf.getContents(null);
+    	if (transf != null && transf.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+    		try {
+    			String textoCopiado = (String) transf.getTransferData(DataFlavor.stringFlavor);
+    			textAreaEditor.setText(textAreaEditor.getText() + textoCopiado);
+    			textPaneMensagens.setText("código colado!");
+    		} catch (Exception ex) {
+    			ex.printStackTrace();
+    			textPaneMensagens.setText("não há o que colar, area de transferência vazia(ctrl-C)!");
+    		}
+    	} 
 	}
 	
 	private String mostrarEquipe() {
 		return "Adriano Gabriel Girardi \nGabriel De Antoni Santos \nLyan Rodrigues";
 	}
 	
-	private String Abrir(JPanel contentPane, JLabel lblStatus) {
+	private void Abrir(JPanel contentPane, JLabel lblStatus, JTextPane textPaneMensagens, JTextArea textAreaEditor) {
 		  JFileChooser chooser = new JFileChooser();
 		  FileNameExtensionFilter filter = new FileNameExtensionFilter("Text Files", "txt");
 		  chooser.setFileFilter(filter);
@@ -373,13 +508,12 @@ public class Tela extends JFrame {
 				  String filePath = chooser.getSelectedFile().getAbsolutePath();
 				  String fileContent = readFile(filePath);
 				  lblStatus.setText(filePath);
-				  return fileContent;
+				 textAreaEditor.setText(fileContent);
+				 textPaneMensagens.setText("");
 			  } catch (Exception e ) {
 				  e.printStackTrace();
 			  }
 		  }
-			return null;
-		  
 	}
 	
     private static String readFile(String filePath) throws Exception {
